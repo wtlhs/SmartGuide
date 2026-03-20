@@ -358,6 +358,15 @@ defineExpose({ openTour })
   display: inline-block !important;
   text-shadow: none !important;
   min-width: 120px !important;
+  box-shadow: none !important;
+  position: relative !important;
+}
+
+/* 清除按钮伪元素，防止文字重影 */
+.driver-popover-btn::before,
+.driver-popover-btn::after {
+  content: none !important;
+  display: none !important;
 }
 
 .driver-popover-next-btn,
@@ -365,6 +374,16 @@ defineExpose({ openTour })
   background: #1976d2 !important;
   color: white !important;
   border-color: #1976d2 !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+.driver-popover-next-btn::before,
+.driver-popover-next-btn::after,
+.driver-popover-done-btn::before,
+.driver-popover-done-btn::after {
+  content: none !important;
+  display: none !important;
 }
 
 .driver-popover-next-btn:hover,
@@ -378,6 +397,14 @@ defineExpose({ openTour })
   background: #f5f5f5 !important;
   color: #666 !important;
   border-color: #ddd !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+.driver-popover-prev-btn::before,
+.driver-popover-prev-btn::after {
+  content: none !important;
+  display: none !important;
 }
 
 .driver-popover-prev-btn:hover {

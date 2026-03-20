@@ -31,7 +31,7 @@
         </p>
       </section>
 
-      <button id="action-button" class="action-btn">
+      <button id="action-button" class="action-btn" @click="startGuide">
         开始使用新功能
       </button>
 
@@ -40,7 +40,7 @@
         <ul>
           <li>首次访问此页面会自动弹出引导</li>
           <li>完成引导后，下次访问不会再自动弹出</li>
-          <li>点击右上角的"帮助"按钮可以随时重新查看引导</li>
+          <li>点击右上角的"帮助"按钮或"开始使用新功能"按钮可以随时重新查看引导</li>
           <li>切换到"关于"页面会看到不同的引导内容</li>
         </ul>
       </section>
@@ -58,6 +58,10 @@ import GuidedTour from '@/components/GuidedTour.vue'
 const tourRef = ref<InstanceType<typeof GuidedTour> | null>(null)
 
 const openHelp = (): void => {
+  tourRef.value?.openTour()
+}
+
+const startGuide = (): void => {
   tourRef.value?.openTour()
 }
 </script>
