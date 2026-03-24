@@ -12,6 +12,122 @@ import { useGuideStore } from '@/stores/guideStore'
 const route = useRoute()
 const guideStore = useGuideStore()
 
+// 轮播图数据结构
+interface CarouselSlide {
+  image: string
+  title: string
+  description: string
+}
+
+// 轮播图数据
+const carouselData: CarouselSlide[] = [
+  {
+    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=180&fit=crop',
+    title: '智能引导系统',
+    description: '这是一个<strong>智能引导系统</strong>，帮助您快速了解页面功能。'
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=400&h=180&fit=crop',
+    title: '多图展示',
+    description: '支持<strong>图片轮播</strong>功能，在同一引导步骤中展示多张图片和说明。'
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=180&fit=crop',
+    title: '灵活交互',
+    description: '可<strong>手动切换</strong>幻灯片或等待自动播放，每5秒自动切换。'
+  }
+]
+
+// 轮播状态管理
+let currentSlideIndex = 0
+let carouselSlides: CarouselSlide[] = []
+let autoPlayInterval: number | null = null
+
+// 初始化轮播功能
+const initCarousel = (slides: CarouselSlide[]) => {
+  carouselSlides = slides
+  currentSlideIndex = 0
+  renderCarousel()
+  startAutoPlay()
+}
+
+// 渲染当前幻灯片
+const renderCarousel = () => {
+  const slide = carouselSlides[currentSlideIndex]
+  const carouselContainer = document.querySelector('.carousel-content')
+
+  if (carouselContainer && slide) {
+    carouselContainer.innerHTML = `
+      <div class="carousel-slide active">
+        <h3 class="carousel-slide-title">${slide.title}</h3>
+        <img src="${slide.image}" alt="${slide.title}" class="carousel-image" onerror="this.style.display='none'">
+        <p class="carousel-description">${slide.description}</p>
+      </div>
+    `
+    updateIndicators()
+  } else {
+    console.warn('[Carousel] Container or slide not found', {
+      hasContainer: !!carouselContainer,
+      hasSlide: !!slide,
+      currentIndex: currentSlideIndex
+    })
+  }
+}
+
+// 下一张幻灯片
+const nextSlide = () => {
+  currentSlideIndex = (currentSlideIndex + 1) % carouselSlides.length
+  renderCarousel()
+}
+
+// 上一张幻灯片
+const prevSlide = () => {
+  currentSlideIndex = (currentSlideIndex - 1 + carouselSlides.length) % carouselSlides.length
+  renderCarousel()
+}
+
+// 跳转到指定幻灯片
+const goToSlide = (index: number) => {
+  currentSlideIndex = index
+  renderCarousel()
+  resetAutoPlay()
+}
+
+// 更新指示器
+const updateIndicators = () => {
+  const indicators = document.querySelectorAll('.carousel-indicator')
+  indicators.forEach((indicator, index) => {
+    if (index === currentSlideIndex) {
+      indicator.classList.add('active')
+    } else {
+      indicator.classList.remove('active')
+    }
+  })
+}
+
+// 自动播放
+const startAutoPlay = () => {
+  if (autoPlayInterval) {
+    clearInterval(autoPlayInterval)
+  }
+  autoPlayInterval = window.setInterval(() => {
+    nextSlide()
+  }, 5000) // 每5秒切换一次
+}
+
+// 重置自动播放
+const resetAutoPlay = () => {
+  startAutoPlay()
+}
+
+// 停止自动播放
+const stopAutoPlay = () => {
+  if (autoPlayInterval) {
+    clearInterval(autoPlayInterval)
+    autoPlayInterval = null
+  }
+}
+
 // 创建 driver 实例
 const driverObj = driver({
   showProgress: true,
@@ -25,11 +141,51 @@ const driverObj = driver({
   overlayColor: 'rgba(0, 0, 0, 0.5)',
   stagePadding: 8,
   stageRadius: 8,
+  smoothScroll: true,
+  scrollIntoViewOptions: {
+    behavior: 'smooth',
+    block: 'center'
+  },
   onDestroyStarted: () => {
     // 用户点击关闭或完成时
+    stopAutoPlay()
     guideStore.markAsSeen(route.path)
     document.body.style.overflow = ''
     driverObj.destroy()
+  },
+  onHighlightStarted: () => {
+    // 每次切换步骤时停止自动播放
+    stopAutoPlay()
+  },
+  onHighlighted: () => {
+    // 当步骤高亮完成后，检查是否需要初始化轮播
+    const currentStep = driverObj.getActiveIndex()
+    if (currentStep === 0 && route.path === '/') {
+      // 延迟初始化，确保DOM已渲染
+      setTimeout(() => {
+        // 将轮播控制函数暴露到 window 对象
+        ;(window as any).carouselNext = nextSlide
+        ;(window as any).carouselPrev = prevSlide
+        ;(window as any).carouselGoTo = goToSlide
+
+        initCarousel(carouselData)
+      }, 50)
+    }
+
+    // 确保弹窗在视口内可见
+    setTimeout(() => {
+      const popover = document.querySelector('.driver-popover') as HTMLElement
+      if (popover) {
+        const rect = popover.getBoundingClientRect()
+        if (rect.top < 0) {
+          // 如果弹窗顶部被遮挡，滚动页面
+          window.scrollBy({
+            top: rect.top - 20,
+            behavior: 'smooth'
+          })
+        }
+      }
+    }, 100)
   },
   steps: []
 })
@@ -42,16 +198,17 @@ const allSteps = [
     popover: {
       title: '👋 欢迎使用产品引导系统',
       description: `
-        <div style="padding: 8px 0;">
-          <p style="font-size: 1.05em; margin-bottom: 12px;">
-            这是一个<strong>智能引导系统</strong>，帮助您快速了解页面功能。
-          </p>
-          <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=200&fit=crop"
-               alt="欢迎引导"
-               style="max-width: 100%; border-radius: 8px; margin-bottom: 12px;">
-          <p style="color: #666; font-size: 0.95em;">
-            💡 提示：您可以随时点击右上角的"帮助"按钮重新查看引导
-          </p>
+        <div class="carousel-container" style="padding: 8px 0;">
+          <div class="carousel-content"></div>
+          <div class="carousel-controls">
+            <button class="carousel-btn carousel-prev" onclick="window.carouselPrev && window.carouselPrev()">‹</button>
+            <div class="carousel-indicators">
+              <span class="carousel-indicator active" onclick="window.carouselGoTo && window.carouselGoTo(0)"></span>
+              <span class="carousel-indicator" onclick="window.carouselGoTo && window.carouselGoTo(1)"></span>
+              <span class="carousel-indicator" onclick="window.carouselGoTo && window.carouselGoTo(2)"></span>
+            </div>
+            <button class="carousel-btn carousel-next" onclick="window.carouselNext && window.carouselNext()">›</button>
+          </div>
         </div>
       `,
       side: 'bottom',
@@ -67,10 +224,16 @@ const allSteps = [
           <p style="margin-bottom: 12px;">
             使用顶部导航栏在<strong>首页</strong>和<strong>关于</strong>页面之间切换
           </p>
-          <img src="https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=180&fit=crop"
-               alt="导航示例"
-               style="max-width: 100%; border-radius: 8px; margin-bottom: 12px;">
-          <ul style="margin-top: 8px; padding-left: 20px; line-height: 1.8;">
+          <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%); border-radius: 8px; overflow: hidden; margin-bottom: 12px; display: flex; align-items: center; justify-content: center;">
+            <img src="https://media.giphy.com/media/qgQUggAC3Pfv687qPC/giphy.gif"
+                 alt="导航演示"
+                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s ease;"
+                 onload="this.style.opacity='1'; this.parentElement.querySelector('.loading-text').style.display='none';"
+                 onerror="this.src='https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&h=180&fit=crop'; this.alt='导航示例';"
+                 loading="lazy">
+            <span class="loading-text" style="color: #999; font-size: 14px; pointer-events: none;">加载中...</span>
+          </div>
+          <ul style="margin-top: 8px; padding-left: 20px; line-height: 1.6; margin-bottom: 0;">
             <li><strong>首页</strong> - 主要功能展示区</li>
             <li><strong>关于</strong> - 项目信息和技术栈</li>
           </ul>
@@ -244,6 +407,19 @@ const startTour = () => {
 
     driverObj.setSteps(steps)
     driverObj.drive()
+
+    // 首次启动时初始化轮播(等待 driver.js 渲染完成)
+    setTimeout(() => {
+      // 将轮播控制函数暴露到 window 对象
+      ;(window as any).carouselNext = nextSlide
+      ;(window as any).carouselPrev = prevSlide
+      ;(window as any).carouselGoTo = goToSlide
+
+      // 如果是首页，初始化轮播
+      if (route.path === '/') {
+        initCarousel(carouselData)
+      }
+    }, 100)
   } catch (error) {
     console.error('[GuidedTour] 启动导览失败:', error)
   }
@@ -289,6 +465,7 @@ defineExpose({ openTour })
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
   max-width: 450px !important;
   color: #2c3e50 !important;
+  position: fixed !important;
 }
 
 .driver-popover-title {
@@ -303,10 +480,17 @@ defineExpose({ openTour })
 }
 
 .driver-popover-description {
-  padding: 20px !important;
-  line-height: 1.6 !important;
-  max-height: 400px !important;
+  padding: 16px !important;
+  line-height: 1.5 !important;
+  max-height: 450px !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* 确保弹窗不会超出视口 */
+.driver-popover.driverjs-theme {
+  max-height: 90vh !important;
+  overflow: visible !important;
 }
 
 .driver-popover-description img {
@@ -314,6 +498,29 @@ defineExpose({ openTour })
   height: auto !important;
   border-radius: 8px !important;
   margin: 12px 0 !important;
+}
+
+/* GIF 图片特殊样式 - 仅用于非容器内的GIF */
+.driver-popover-description > img[src*="giphy"],
+.driver-popover-description > img[src*=".gif"] {
+  max-width: 100% !important;
+  max-height: 200px !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 8px !important;
+  background: #f5f5f5 !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+/* GIF 图片容器和图片样式 */
+.driver-popover-description div[style*="aspect-ratio"] {
+  max-height: 200px;
+}
+
+.driver-popover-description div[style*="aspect-ratio"] img {
+  box-shadow: none !important;
+  margin: 0 !important;
 }
 
 .driver-popover-description ul {
@@ -446,5 +653,128 @@ defineExpose({ openTour })
 /* 遮罩层 */
 .driver-overlay {
   background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 轮播组件样式 */
+.carousel-container {
+  position: relative;
+  min-height: 280px;
+  overflow: visible;
+}
+
+.carousel-content {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+}
+
+.carousel-slide {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.carousel-slide-title {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: #1976d2;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #e3f2fd;
+}
+
+.carousel-image {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 8px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.carousel-image:hover {
+  transform: scale(1.02);
+}
+
+.carousel-description {
+  color: #555;
+  line-height: 1.5;
+  font-size: 0.95em;
+  padding: 4px 0;
+  margin-bottom: 0;
+}
+
+.carousel-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.carousel-btn {
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+  line-height: 1;
+  padding: 0;
+}
+
+.carousel-btn:hover {
+  background: #1565c0;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.4);
+}
+
+.carousel-btn:active {
+  transform: scale(0.95);
+}
+
+.carousel-indicators {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.carousel-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ddd;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.carousel-indicator:hover {
+  background: #bbb;
+}
+
+.carousel-indicator.active {
+  background: #1976d2;
+  width: 20px;
+  border-radius: 4px;
 }
 </style>
